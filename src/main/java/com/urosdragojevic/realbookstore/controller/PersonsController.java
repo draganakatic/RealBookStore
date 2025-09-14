@@ -1,14 +1,20 @@
 package com.urosdragojevic.realbookstore.controller;
 
+
 import com.urosdragojevic.realbookstore.audit.AuditLogger;
 import com.urosdragojevic.realbookstore.domain.Person;
 import com.urosdragojevic.realbookstore.domain.User;
 import com.urosdragojevic.realbookstore.repository.PersonRepository;
 import com.urosdragojevic.realbookstore.repository.UserRepository;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -52,18 +58,37 @@ public class PersonsController {
     }
 
     @PostMapping("/update-person")
-    public String updatePerson(Person person) {
+    public String updatePerson(Person person, HttpSession session, @RequestParam("csrfToken") String csrfToken,
+                               HttpServletRequest request) throws AccessDeniedException {
+
+        String csrf = session.getAttribute("CSRF_TOKEN").toString();
+
+        if (!csrf.equals(csrfToken)) {
+            throw new AccessDeniedException("Forbidden");
+        }
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        String username = authentication.getName();
+        System.out.println(username + " " + person.getFirstName());
+
+        if(!username.equalsIgnoreCase(person.getFirstName())){
+            throw new AccessDeniedException("Forbidden");
+        }
         personRepository.update(person);
+
         return "redirect:/persons/" + person.getId();
+
     }
 
     @GetMapping("/persons")
+    @PreAuthorize("hasAuthority('VIEW_PERSONS_LIST')")
     public String persons(Model model) {
         model.addAttribute("persons", personRepository.getAll());
         return "persons";
     }
 
     @GetMapping(value = "/persons/search", produces = "application/json")
+    @PreAuthorize("hasAuthority('VIEW_PERSONS_LIST')")
     @ResponseBody
     public List<Person> searchPersons(@RequestParam String searchTerm) throws SQLException {
         return personRepository.search(searchTerm);
